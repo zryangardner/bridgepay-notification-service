@@ -1,4 +1,4 @@
-package com.bridgepay.notificationservice
+package com.bridgepay.notification
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
