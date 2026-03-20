@@ -16,4 +16,17 @@ class SqsConsumer(private val notificationService: NotificationService) {
         logger.debug("Received SQS message for payment id={}", event.id)
         notificationService.processNotification(event)
     }
+
+    @SqsListener("\${app.sqs.dlq-url}")
+    fun onDeadLetter(event: PaymentCreatedEvent) {
+        logger.error(
+            "Dead letter received [id={}, amount={} {}, status={}, sender={}, recipient={}]",
+            event.id,
+            event.amount,
+            event.currency,
+            event.status,
+            event.senderId,
+            event.recipientId
+        )
+    }
 }
