@@ -1,6 +1,6 @@
 package com.bridgepay.notification.service
 
-import com.bridgepay.notification.model.PaymentCreatedEvent
+import com.bridgepay.notification.model.PaymentResultEvent
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -12,40 +12,52 @@ class NotificationService(
     private val snsNotificationService: Optional<SnsNotificationService>,
     private val emailNotificationService: Optional<EmailNotificationService>
 ) {
-
     private val logger = LoggerFactory.getLogger(NotificationService::class.java)
 
-    fun processNotification(event: PaymentCreatedEvent) {
+    fun processNotification(event: PaymentResultEvent) {
         logger.info(
-            "Processing notification for payment [id={}, amount={} {}, status={}, sender={}, recipient={}]",
-            event.id,
-            event.amount,
-            event.currency,
-            event.status,
-            event.senderId,
-            event.recipientId
+            "Processing notification [paymentId={}, status={}, sender={}, recipient={}]",
+            event.paymentId, event.status, event.senderId, event.recipientId
         )
 
         if (!notificationsEnabled) {
             logger.info(
-                "Notification suppressed (notifications.enabled=false) — would have notified senderId: {}, recipientId: {}",
+                "Notifications suppressed — would notify senderId={}, recipientId={}",
                 event.senderId,
-                event.recipientId
+                if (event.status == "COMPLETED") event.recipientId else "n/a"
             )
             return
         }
 
-        val smsBody = "BridgePay: Payment of ${event.amount} ${event.currency} is ${event.status}."
-        snsNotificationService.ifPresent { it.sendSms(event.recipientId, smsBody) }
-
-        val emailSubject = "BridgePay Payment ${event.status}"
-        val emailBody = """
-            Your BridgePay payment has been updated.
-
-            Amount:    ${event.amount} ${event.currency}
-            Status:    ${event.status}
-            Reference: ${event.id}
-        """.trimIndent()
-        emailNotificationService.ifPresent { it.sendEmail(event.senderId, emailSubject, emailBody) }
+        when (event.status) {
+            "COMPLETED" -> {
+                val msg = "BridgePay: Payment of ${event.amount} ${event.currency} completed successfully."
+                snsNotificationService.ifPresent { it.sendSms(event.senderId, msg) }
+                snsNotificationService.ifPresent { it.sendSms(event.recipientId, msg) }
+                emailNotificationService.ifPresent {
+                    it.sendEmail(event.senderId, "BridgePay Payment Completed",
+                        buildEmailBody(event, "Your payment was sent successfully."))
+                    it.sendEmail(event.recipientId, "BridgePay Payment Received",
+                        buildEmailBody(event, "You received a payment."))
+                }
+            }
+            "FAILED" -> {
+                val msg = "BridgePay: Payment of ${event.amount} ${event.currency} failed. ${event.reason ?: ""}".trim()
+                snsNotificationService.ifPresent { it.sendSms(event.senderId, msg) }
+                emailNotificationService.ifPresent {
+                    it.sendEmail(event.senderId, "BridgePay Payment Failed",
+                        buildEmailBody(event, "Your payment could not be processed. ${event.reason ?: ""}".trim()))
+                }
+            }
+            else -> logger.warn("Unknown payment status '{}' for paymentId={}", event.status, event.paymentId)
+        }
     }
+
+    private fun buildEmailBody(event: PaymentResultEvent, headline: String) = """
+        $headline
+
+        Amount:    ${event.amount} ${event.currency}
+        Status:    ${event.status}
+        Reference: ${event.paymentId}
+    """.trimIndent()
 }

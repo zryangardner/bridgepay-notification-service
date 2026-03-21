@@ -1,6 +1,6 @@
 package com.bridgepay.notification.consumer
 
-import com.bridgepay.notification.model.PaymentCreatedEvent
+import com.bridgepay.notification.model.PaymentResultEvent
 import com.bridgepay.notification.service.NotificationService
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -19,8 +19,8 @@ class SqsConsumerTest {
     @InjectMocks
     private lateinit var sqsConsumer: SqsConsumer
 
-    private val event = PaymentCreatedEvent(
-        id = "payment-456",
+    private val event = PaymentResultEvent(
+        paymentId = "payment-456",
         amount = 250.0,
         currency = "USD",
         status = "COMPLETED",
@@ -29,8 +29,8 @@ class SqsConsumerTest {
     )
 
     @Test
-    fun `onMessage delegates to notificationService processNotification with the correct event`() {
-        sqsConsumer.onMessage(event)
+    fun `onPaymentResult delegates to notificationService processNotification with the correct event`() {
+        sqsConsumer.onPaymentResult(event)
 
         verify(notificationService).processNotification(event)
     }
